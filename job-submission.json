@@ -1,0 +1,7 @@
+{
+  "entryClass": "org.example.JoinStreams",
+  "programArgs": "",
+  "parallelism": 2,
+  "allowNonRestoredState": false,
+  "savepointPath": null
+}

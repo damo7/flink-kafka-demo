@@ -1,20 +1,25 @@
-# Apache Flink / Apache Kafka Streaming Analytics Demo
+# Evoura demo labs - configurable use cases for understanding data streaming and different systems
 
-[Apache Flink](https://flink.apache.org/) streaming data analytics demonstration, written in Java and
+'''txt
+This is a fork of the original work done by gary stafford: streaming data analytics demonstration, written in Java and
 using the [Streaming Synthetic Sales Data Generator](https://github.com/garystafford/streaming-sales-generator). 
+
+What we have done is update the various frameworks versions to the latest, update Java code to compatible with Java 11 (including gradel build scripts), and have the jobs uploaded through Flink's API. For now, this lab is only for local development and deployment, but we will start to configure scripting to allow it to be deployed to seperate cloud providers. 
+
+Moving forward we will expand the use cases to include CDC, removing Kafka and replacing it with Redpanda, introduce Ververica and their hosted platform instead of Apache Flink and include seperate storage using Apache Iceberg (and the newly released catalog from snowflake). 
+
+We will also start to configure different objectives to demonstrate the different end use cases that can be used with these tools. From monitoring telecoms networks, cyber security, high frequency trading and embedding AI models into Flink for RAG/LLM use cases. 
+
+Evoura will continue to maintain this working lab with contributions being opened to whoever would like to committ to new use cases. If have any issues, please file a ticket and we will do our best to respond.
+'''txt
+
+# Jobs and set-up
 
 * `org.example.RunningTotals`: Consumes a stream of sales transaction messages and publishes a stream of running totals of product transactions, quantities, and sales to a Kafka topic
 * `org.example.JoinStreams`: Consumes a stream of product and purchase messages from two different Kafka topics, joins both into an enriched purchase object, and writes results to a third Kafka topic
 
-* Demonstration uses
-  Kafka/Flink [Docker Swarm Stack](https://github.com/garystafford/streaming-sales-generator/blob/main/docker-compose.yml)
-  from 'Sales Data Generator' project
-
 * Uber JAR built with Gradle using Amazon Corretto (OpenJDK) version 11 (openjdk version "11.0.16.1" 2022-08-12 LTS)
 
-## Video Demonstration
-
-Short [YouTube video](https://youtu.be/ja0M_2zdbfs) demonstration of this project (video only - no audio).
 
 ## Input Message Stream
 
@@ -65,12 +70,6 @@ Sample enriched purchases messages:
 {"transaction_time":"2022-09-13 12:51:09.807906","transaction_id":"8552032150877524327","product_id":"SF05","product_category":"Superfoods Smoothies","product_name":"Caribbean C-Burst","product_size":"24 oz.","product_cogs":2.10,"product_price":5.99,"contains_fruit":true,"contains_veggies":false,"contains_nuts":false,"contains_caffeine":false,"purchase_price":5.99,"purchase_quantity":1,"is_member":true,"member_discount":0.10,"add_supplements":false,"supplement_price":0.00,"total_purchase":5.39}
 ```
 
-## Apache Flink Dashboard Preview
-
-![Apache Flink Dashboard 2](screengrabs/flink_dashboard2.png)
-
-![Apache Flink Dashboard 1](screengrabs/flink_dashboard1.png)
-
 ## Compile and Run Flink Job
 
 ```shell
@@ -80,14 +79,11 @@ JAVA_HOME=~/Library/Java/JavaVirtualMachines/corretto-11.0.16.1/Contents/Home
 # build uber jar using Gradle
 ./gradlew clean shadowJar
 
-# Upload via the Flink UI or copy to Flink Docker image
-FLINK_CONTAINER=$(docker container ls --filter  name=kafka-flink_jobmanager --format "{{.ID}}")
-docker cp build/libs/flink-kafka-demo-1.0.0-all.jar ${FLINK_CONTAINER}:/tmp
-docker exec -it ${FLINK_CONTAINER} bash
+# Upload JAR and submit the job using flink API's:
 
-flink run -c org.example.RunningTotals /tmp/flink-kafka-demo-1.0.0-all.jar
+curl -X POST -H "Expect:" -F "jarfile=@/path/to/your/flink-kafka-demo-1.2.0.jar" http://localhost:8081/jars/upload
+curl -X POST -H "Content-Type: application/json" -d @job-submission.json http://localhost:8081/jars/<jar_id>/run
 
-flink run -c org.example.JoinStreams /tmp/flink-kafka-demo-1.0.0-all.jar
 ```
 
 ## Kafka
@@ -173,22 +169,17 @@ docker exec -it $(docker container ls --filter  name=kafka-flink_kafka --format 
 Example containers:
 
 ```text
-CONTAINER ID   IMAGE                      PORTS                                    NAMES
-69ad1556eb3a   flink:latest               6123/tcp, 8081/tcp                       kafka-flink_taskmanager.1...
-9f9b8e43eb21   flink:latest               6123/tcp, 8081/tcp                       kafka-flink_jobmanager.1...
-6114dc4a9824   bitnami/kafka:latest       9092/tcp                                 kafka-flink_kafka.1...
-837c0cdd1498   bitnami/zookeeper:latest   2181/tcp, 2888/tcp, 3888/tcp, 8080/tcp   kafka-flink_zookeeper.1...
+CONTAINER ID   NAME                                                           CPU %     MEM USAGE / LIMIT     MEM %     NET I/O           BLOCK I/O         PIDS
+9f54226b47c6   streaming-stack_kafka.1.lg9ucoxzsjh21cqg7ek2had2f              0.57%     998.3MiB / 11.67GiB   8.35%     25.5MB / 164MB    1.91MB / 213MB    90
+b15dbca6d518   streaming-stack_kafka-ui.1.z4oe4xl16u69zi5dcf44vpmyf           0.10%     424.2MiB / 11.67GiB   3.55%     149MB / 15.3MB    8.66MB / 40.6MB   58
+ead0b54b1819   streaming-stack_zookeeper.1.sdwpo5f8mebm06ztjg6oqxb4u          0.12%     210.4MiB / 11.67GiB   1.76%     31.6MB / 25.4MB   369kB / 72.3MB    71
+dfe1c5a0b6cd   streaming-stack_taskmanager.1.kdk4nn38ycowpn58ap0wj2hm8        1.00%     991.9MiB / 11.67GiB   8.30%     95.8MB / 79.7MB   7.75MB / 186MB    82
+a4bcc1c1f865   streaming-stack_jobmanager.1.j3m7ic4m659uw776pt063wf4t         1.07%     1.684GiB / 11.67GiB   14.43%    251MB / 119MB     95.8MB / 294MB    132
+a00cea8c318d   streaming-stack_jupyter.1.ovnff1xgurkbpm6a0janv3f96            0.00%     48.5MiB / 11.67GiB    0.41%     12.2kB / 300B     4.4MB / 15.2MB    3
+c62d96402a36   streaming-stack_pinot-controller.1.p58k4jta4snild2rm3mxl38lw   0.59%     1.021GiB / 11.67GiB   8.74%     10.1MB / 12MB     242MB / 132MB     161
+c62d1670365b   streaming-stack_pinot-server.1.rdschtw6ucclen2be8pkq78uw       0.39%     1.843GiB / 11.67GiB   15.79%    3.32MB / 4.15MB   15.9MB / 130MB    82
+0bb1902e81a4   streaming-stack_pinot-broker.1.ud3xjbjao7rp7b02nbpwa2rg6       0.39%     2.908GiB / 11.67GiB   24.91%    4.81MB / 6.89MB   29.2MB / 37MB     84
 ```
 
 ## References
 
-* <https://www.baeldung.com/kafka-flink-data-pipeline>
-* <https://github.com/eugenp/tutorials/tree/master/apache-kafka/src/main/java/com/baeldung/flink>
-* <https://github.com/apache/flink/blob/master/flink-examples/flink-examples-table/src/main/java/org/apache/flink/table/examples/java/basics/StreamSQLExample.java>
----
-
-_The contents of this repository represent my viewpoints and not of my past or current employers, including Amazon Web
-Services (AWS). All third-party libraries, modules, plugins, and SDKs are the property of their respective owners. The
-author(s) assumes no responsibility or liability for any errors or omissions in the content of this site. The
-information contained in this site is provided on an "as is" basis with no guarantees of completeness, accuracy,
-usefulness or timeliness._
